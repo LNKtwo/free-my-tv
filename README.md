@@ -158,6 +158,7 @@ The first values come from `config.properties`, created by the first build (Goog
 | `watchmode_key` | Optional, free [Watchmode](https://api.watchmode.com/) key: a pick opens the title's page in its app | empty |
 | `plex_url` and `plex_token` | Optional, your Plex server's `plex.direct` address and token: its newest titles join the picks and open on their page | empty |
 | `trakt_client_id` | Optional: the Client ID of your own free [Trakt](https://trakt.tv/oauth/applications) API app. Home Settings > Picks then gets a Trakt row to sign in with a code, and the picks start with what you're in the middle of, bring in your watchlist and leave out what you've watched. Google TV only | empty |
+| `jellyfin_url`, `jellyfin_token` | Google TV: picks from your own Jellyfin server (what you're watching, what's new). `python3 tools/jellyfin_login.py` signs in and fills both | empty |
 | `latitude`, `longitude` | Your city, for the weather and the sunset | New York |
 | `city` | The name on the weather card | `Weather` |
 | `hide_animation` | Leave cartoons and anime out of the picks | `false` |
@@ -193,6 +194,8 @@ On LG and Samsung you can also type it on the TV, in *Home Settings* → *TMDB k
 ### Opening a title, not just its app (optional)
 
 With a free [Watchmode](https://api.watchmode.com/) key (`watchmode_key=` in `config.properties`), a pick opens its own page in the streaming app instead of the app's home. The free plan (2,500 credits a month) is enough: each title costs two requests the first time and is remembered after that. It works where the app takes the title's web address (tested: Prime Video, JioHotstar and Netflix); where it doesn't, the pick just opens the app, as without a key.
+
+With your own Jellyfin server (`jellyfin_url` and `jellyfin_token` in `config.properties`; `python3 tools/jellyfin_login.py` signs in and writes both), the picks start with what you're in the middle of and what's new in your library, refreshed every 5 minutes, and *Watch* opens the title's page in the Jellyfin app. It works without a TMDB key too, and the screensaver shows these titles as well. A server given as `http://` must be on your own network, and only that host may skip HTTPS; the token is a user token (an API key from the dashboard has no *Continue Watching*). Google TV only.
 
 ### Your own photos (optional)
 

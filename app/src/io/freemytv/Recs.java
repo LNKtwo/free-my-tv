@@ -41,7 +41,7 @@ import java.util.concurrent.Executors;
  * Home screen picks ("This morning / afternoon / tonight"): what's trending this week plus recent releases, only from
  * the streaming apps installed on the TV (Netflix, Prime Video, Disney+, Max, Apple TV, Okko, Hulu, Paramount+, Peacock,
  * Globoplay...), via TMDB (an open movie database that knows what streams where in each country). 3 per hour, or up to 6 (Home Settings).
- * "Watch" opens the service's app.
+ * "Watch" opens the service's app. Picks from your own Jellyfin server come first (Jellyfin.java).
  *
  * Each person uses their own free TMDB key: given on the TV (Home Settings > TMDB key, which the APK on GitHub's
  * releases needs), else config.properties' "tmdb_key", built into the app. It never goes to the log.
@@ -56,6 +56,8 @@ final class Recs {
         String tag;             // Trakt: "Up next: S2 E5", "On your watchlist"…, first in the meta; else null
         int mine;               // Trakt: PROGRESS, LIKED (watchlist, recommended) or 0 (TMDB's)
         boolean detailed;
+        String item;            // Jellyfin: the title's id on your server (null for TMDB's picks)
+        boolean resume;         // Jellyfin: you're in the middle of it
         java.io.File photo;     // one of your own photos (Photos): no title, no caption
     }
 
@@ -71,7 +73,7 @@ final class Recs {
     private static final String POSTERS = "https://image.tmdb.org/t/p/w500";
     /** TMDB's Animation genre (movies and shows: cartoons and anime), left out with hide_animation=true. */
     private static final int ANIMATION = 16;
-    private static final long LIST_EVERY = 6 * 3600_000L;
+    private static final long LIST_EVERY = 6 * 3600_000L, JELLYFIN_EVERY = 5 * 60_000L;
     /** How often Trakt is asked whether the account changed (marked watched, the watchlist): one small request. */
     private static final long TRAKT_EVERY = 10 * 60_000L;
     /** Bump when what is saved for each title changes (the saved list is discarded and fetched again). */
@@ -80,8 +82,8 @@ final class Recs {
     private static final int POOL = 24;
     /** Trakt's titles in the list: about what the tabs show of them (now(): up to 2 in 5 in progress, 3 in 5 liked). */
     private static final int TRAKT_MAX = MAX_CARDS;
-    /** Images kept on disk: a backdrop and a poster for every title the list can hold. */
-    private static final int FILES = 2 * (POOL + TRAKT_MAX);
+    /** Images kept on disk: a backdrop and a poster for every title the list can hold, and Jellyfin's 12 backdrops. */
+    private static final int FILES = 2 * (POOL + TRAKT_MAX) + 12;
     /** Pick.mine: what they're in the middle of, and what they'd like (watchlist, Trakt's recommendations). */
     private static final int PROGRESS = 1, LIKED = 2;
     private static final int MANHA = 0, TARDE = 1, NOITE = 2;
@@ -159,6 +161,7 @@ final class Recs {
         SERVICE_NAME.put("amediateka", "Амедиатека");
         SERVICE_NAME.put("wink", "Wink");
         SERVICE_NAME.put("plex", "Plex");
+        SERVICE_NAME.put("jellyfin", "Jellyfin");
     }
     /** Country for "what streams where" (config.properties "tmdb_region", e.g. US, GB, BR). */
     static final String REGION = Place.region();
@@ -192,7 +195,9 @@ final class Recs {
     private final Map<String, Poster> posters = new LinkedHashMap<>();   // narrow-card portraits, same keys as images
     private final Map<String, Backdrop> images = new LinkedHashMap<>(16, 0.75f, true);   // this hour's, built and ready to draw
     private final java.util.Set<String> pending = new java.util.HashSet<>();
-    private volatile List<Pick> picks = new ArrayList<>();
+    private volatile List<Pick> picks = new ArrayList<>();   // TMDB's (saved); Jellyfin's are fetched on each start
+    private volatile List<Pick> jellyfin = new ArrayList<>();
+    private volatile long jellyfinAt;
     private volatile int period = -1;
     private volatile long listAt;
     private volatile boolean fetching;
@@ -286,6 +291,11 @@ final class Recs {
         }
     }
 
+    /** Picks on the home screen: from TMDB (with a key) and/or your Jellyfin server. */
+    static boolean on(Context c) {
+        return hasKey(c) || Jellyfin.ON;
+    }
+
     /** Last fetch, for the settings screen: {count, error, at}. Written by the home screen (another process). */
     static JSONObject status(Context c) {
         File f = new File(c.getFilesDir(), "recs-status.json");
@@ -327,10 +337,9 @@ final class Recs {
     /** This hour's Prefs.cards(), movies only ("movie") or shows only ("tv"); null = both (the home screen tabs). */
     List<Pick> now(String kind) {
         List<Pick> out = new ArrayList<>();
-        if (!hasKey(context)) return out;    // no TMDB key: no recommendations
         List<Pick> progress = new ArrayList<>(), liked = new ArrayList<>(), list = new ArrayList<>();
         Map<String, Boolean> have = new HashMap<>();   // one look per app, not per title (this runs every 15 s)
-        for (Pick p : picks) {
+        for (Pick p : all()) {
             if ((kind == null || kind.equals(p.kind))
                     && (!p.detailed || (p.pkg != null && have.computeIfAbsent(p.pkg, this::installed)
                     && (p.servicePkg == null || have.computeIfAbsent(p.servicePkg, this::installed))))) {   // app missing or switched off: skip
@@ -343,6 +352,13 @@ final class Recs {
         // TMDB's run short. Never two from the same franchise ("Law & Order" and "Law & Order: Special…").
         int cards = Prefs.cards();
         java.util.Set<String> seen = new java.util.HashSet<>();
+        // What you're in the middle of on Jellyfin comes first, every hour.
+        for (Pick p : list) {
+            if (p.resume && seen.add(franchise(p.title))) {
+                out.add(p);
+                break;
+            }
+        }
         take(out, seen, progress, 0, Math.max(1, cards * 2 / 5));
         take(out, seen, liked, hour * cards, Math.max(2, cards * 3 / 5));
         take(out, seen, list, hour * cards, cards);
@@ -363,6 +379,14 @@ final class Recs {
                 plex |= p.id < 0;
             }
         }
+    }
+
+    /** Jellyfin's picks, then TMDB's (only with a key: without one, the saved list is left over from an old build). */
+    private List<Pick> all() {
+        if (!hasKey(context)) return jellyfin;
+        List<Pick> all = new ArrayList<>(jellyfin);
+        all.addAll(picks);
+        return all;
     }
 
     /** "Law & Order: Special Victims Unit" → "law & order" (what comes before ":" or " - "). */
@@ -402,80 +426,119 @@ final class Recs {
     }
 
     private File imageFile(Pick p) {
-        return new File(new File(context.getCacheDir(), "recs"), p.backdrop.replace("/", ""));
+        // TMDB's "/abc.jpg" → "abc.jpg"; a Jellyfin URL loses its ":/?&=" the same way.
+        return new File(new File(context.getCacheDir(), "recs"), p.backdrop.replaceAll("[^\\w.-]", ""));
     }
 
-    /** With a key: fetches the list if stale or the time of day (morning/afternoon/night) changed; then the details. */
+    /**
+     * Jellyfin's list every 5 minutes (it's on your network, and what you're watching changes). With a TMDB key, its
+     * list if stale or the time of day (morning/afternoon/night) changed; then this hour's details.
+     */
     void refreshIfStale() {
-        if (!hasKey(context) || fetching) return;
+        if (fetching) return;
         long now = System.currentTimeMillis();
-        long stamp = sourceStamp();   // a new key, country, animation choice or installed streaming-app set refetches
-        boolean newKey = stamp != keyStamp;
-        // Signing in or out of Trakt fetches the list again, judged only in :home: the screensaver's process on Android
-        // 11 to 12L has no Trakt, and must not take the saved list for another account's.
-        long trakt = Trakt.available() ? Trakt.stamp(context) : traktStamp;
-        boolean newTrakt = trakt != traktStamp;
-        long sinceFail = now - failedAt;    // negative = the clock went back: don't wait
-        if (!newKey && !newTrakt && failedAt != 0 && sinceFail >= 0 && sinceFail < 10 * 60_000L) return;
+        boolean jf = Jellyfin.ON && (now - jellyfinAt > JELLYFIN_EVERY || now < jellyfinAt);
+        boolean tmdb = false, stale = false, newTrakt = false, checkTrakt = false;
         int p = period(now);
-        boolean stale = newKey || p != period || now - listAt > LIST_EVERY || now < listAt || picks.isEmpty()
-                || !listLanguage.equals(Ui.language);
-        boolean missing = false;
-        for (Pick pick : wanted()) missing |= !pick.detailed || !hasImage(pick) || needsLink(pick);
-        boolean checkTrakt = !stale && !newTrakt && Trakt.signedIn(context) && (now - traktCheckedAt > TRAKT_EVERY || now < traktCheckedAt);
-        if (!stale && !missing && !checkTrakt && !newTrakt) return;
-        keyStamp = stamp;
-        traktStamp = trakt;
+        long stamp = keyStamp, trakt = traktStamp;
+        if (hasKey(context)) {
+            stamp = sourceStamp();   // a new key, country, animation choice or installed streaming-app set refetches
+            boolean newKey = stamp != keyStamp;
+            // Signing in or out of Trakt fetches the list again, judged only in :home: the screensaver's process on Android
+            // 11 to 12L has no Trakt, and must not take the saved list for another account's.
+            trakt = Trakt.available() ? Trakt.stamp(context) : traktStamp;
+            newTrakt = trakt != traktStamp;
+            long sinceFail = now - failedAt;    // negative = the clock went back: don't wait
+            boolean waiting = !newKey && !newTrakt && failedAt != 0 && sinceFail >= 0 && sinceFail < 10 * 60_000L;
+            stale = newKey || p != period || now - listAt > LIST_EVERY || now < listAt || picks.isEmpty()
+                    || !listLanguage.equals(Ui.language);
+            boolean missing = false;
+            for (Pick pick : wanted()) missing |= pick.item == null && (!pick.detailed || !hasImage(pick) || needsLink(pick));
+            checkTrakt = !stale && !newTrakt && Trakt.signedIn(context) && (now - traktCheckedAt > TRAKT_EVERY || now < traktCheckedAt);
+            tmdb = !waiting && (stale || missing || checkTrakt || newTrakt);
+        }
+        if (!jf && !tmdb) return;
+        if (tmdb) {
+            keyStamp = stamp;
+            traktStamp = trakt;
+        }
+        final boolean fetchJellyfin = jf, fetchTmdb = tmdb, fetchList = stale, fetchTrakt = newTrakt, askTrakt = tmdb && checkTrakt;
         fetching = true;
-        if (checkTrakt) traktCheckedAt = now;
+        if (askTrakt) traktCheckedAt = now;
         io.execute(() -> {
             try {
-                boolean list = stale || newTrakt;
-                if (checkTrakt) {
-                    try {
-                        String activity = Trakt.activity(context);
-                        if (!activity.isEmpty() && !activity.equals(traktActivity)) {
-                            AppLog.w("trakt: the account changed, fetching the picks again");
-                            list = true;
-                        }
-                    } catch (Exception e) {
-                        AppLog.w("trakt activity: " + e.getMessage());
-                    }
-                }
-                if (list) {
-                    // Only the Trakt account changed: the titles already in the list keep their details.
-                    Map<String, Pick> known = new HashMap<>();
-                    if (!stale) for (Pick k : picks) if (k.detailed) known.put(key(k), k);
-                    fetchList(p, known);
-                }
-                // One failing title doesn't stop the others; whatever has no app on the TV is not downloaded.
-                int failures = 0, tried = 0;
-                String last = "";
-                for (Pick pick : wanted()) {
-                    tried++;
-                    try {
-                        if (!pick.detailed) fetchDetails(pick);
-                        if (pick.pkg != null) download(pick);
-                    } catch (Exception e) {
-                        failures++;
-                        last = e.getMessage() == null ? e.toString() : e.getMessage();
-                    }
-                    findLink(pick);
-                }
-                save();
-                if (tried > 0 && failures == tried) throw new IOException(last);
-                error = "";
-                failedAt = 0;
-            } catch (Exception e) {
-                error = e.getMessage() == null ? e.toString() : e.getMessage();
-                failedAt = System.currentTimeMillis();
-                AppLog.w("recommendations: " + error);
+                if (fetchJellyfin) refreshJellyfin();
+                if (fetchTmdb) refreshTmdb(fetchList, fetchTrakt, askTrakt, p);
             } finally {
                 fetching = false;
                 writeStatus();
                 notifyListeners();
             }
         });
+    }
+
+    /** Keeps the last list if the server doesn't answer (it's off, or the TV is on another network). */
+    private void refreshJellyfin() {
+        try {
+            List<Pick> list = Jellyfin.picks();
+            for (Pick p : list) {
+                try {
+                    download(p);    // all of them, not just this hour's: they're on your network, and the screensaver shows them
+                } catch (IOException e) {
+                    AppLog.w("jellyfin image: " + e.getMessage());
+                }
+            }
+            jellyfin = list;
+        } catch (Exception e) {
+            AppLog.w("jellyfin: " + (e.getMessage() == null ? e.toString() : e.getMessage()));
+        }
+        jellyfinAt = System.currentTimeMillis();
+    }
+
+    private void refreshTmdb(boolean stale, boolean newTrakt, boolean checkTrakt, int p) {
+        try {
+            boolean list = stale || newTrakt;
+            if (checkTrakt) {
+                try {
+                    String activity = Trakt.activity(context);
+                    if (!activity.isEmpty() && !activity.equals(traktActivity)) {
+                        AppLog.w("trakt: the account changed, fetching the picks again");
+                        list = true;
+                    }
+                } catch (Exception e) {
+                    AppLog.w("trakt activity: " + e.getMessage());
+                }
+            }
+            if (list) {
+                // Only the Trakt account changed: the titles already in the list keep their details.
+                Map<String, Pick> known = new HashMap<>();
+                if (!stale) for (Pick k : picks) if (k.detailed) known.put(key(k), k);
+                fetchList(p, known);
+            }
+            // One failing title doesn't stop the others; whatever has no app on the TV is not downloaded.
+            int failures = 0, tried = 0;
+            String last = "";
+            for (Pick pick : wanted()) {
+                if (pick.item != null) continue;   // Jellyfin's: already done
+                tried++;
+                try {
+                    if (!pick.detailed) fetchDetails(pick);
+                    if (pick.pkg != null) download(pick);
+                } catch (Exception e) {
+                    failures++;
+                    last = e.getMessage() == null ? e.toString() : e.getMessage();
+                }
+                findLink(pick);
+            }
+            save();
+            if (tried > 0 && failures == tried) throw new IOException(last);
+            error = "";
+            failedAt = 0;
+        } catch (Exception e) {
+            error = e.getMessage() == null ? e.toString() : e.getMessage();
+            failedAt = System.currentTimeMillis();
+            AppLog.w("recommendations: " + error);
+        }
     }
 
     /** Home screen design: the ready images are rebuilt for it (the light design uses cards, not the whole photo). */
@@ -494,11 +557,10 @@ final class Recs {
      */
     List<Pick> showcase() {
         List<Pick> out = new ArrayList<>();
-        if (!hasKey(context)) return out;
         java.util.Set<String> seen = new java.util.HashSet<>();
         for (Pick p : wanted()) if (hasImage(p) && seen.add(franchise(p.title))) out.add(p);
         Map<String, Boolean> have = new HashMap<>();
-        for (Pick p : picks) {
+        for (Pick p : all()) {
             if (p.detailed && p.pkg != null && have.computeIfAbsent(p.pkg, this::installed) && hasImage(p)
                     && (p.servicePkg == null || have.computeIfAbsent(p.servicePkg, this::installed))
                     && seen.add(franchise(p.title))) out.add(p);
@@ -567,7 +629,7 @@ final class Recs {
 
     /** Movies and shows are numbered separately on TMDB: a pick is identified by type + number. */
     static String key(Pick p) {
-        return p.kind + ":" + p.id;
+        return p.item != null ? "jellyfin:" + p.item : p.kind + ":" + p.id;
     }
 
     private void notifyListeners() {
@@ -1144,7 +1206,9 @@ final class Recs {
 
     private void download(Pick p) throws IOException {
         File f = imageFile(p);
-        if (!f.exists()) fetchFile(f, p.id < 0
+        if (!f.exists()) fetchFile(f, p.item != null
+                ? (HttpURLConnection) new URL(p.backdrop).openConnection()
+                : p.id < 0
                 ? plexOpen("/photo/:/transcode?width=1920&height=1080&minSize=1&url=" + URLEncoder.encode(p.backdrop, "UTF-8"))
                 : (HttpURLConnection) new URL(IMAGES + p.backdrop).openConnection());
         File poster = posterFile(p);
@@ -1317,7 +1381,7 @@ final class Recs {
         return out;
     }
 
-    private static String read(InputStream in) throws IOException {
+    static String read(InputStream in) throws IOException {
         ByteArrayOutputStream out = new ByteArrayOutputStream();
         byte[] buffer = new byte[8192];
         int n;

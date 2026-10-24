@@ -66,6 +66,7 @@ final class HomeApps {
     static final class Item {
         int kind;
         String key, label, pkg, inputId, number;
+        String item;        // a Jellyfin pick: the title whose page the app opens on
         String uri;         // opens this address in the app instead of the app's home (a title's page)
         Intent intent;      // DEVICE: the TV maker's own screen it opens
         String symbol;      // icon for the shortcuts and special cards
@@ -116,6 +117,7 @@ final class HomeApps {
         {"premier", "Premier", "gpm.tnt_premier", "FF2D55", "", "1"},
         {"amediateka", "Амедиатека", "ru.amediateka", "E31E24", "", "1"},
         {"wink", "Wink", "ru.rt.video.app.tv", "FF5A1F", "", "1"},
+        {"jellyfin", "Jellyfin", "org.jellyfin.androidtv", "00A4DC", "", "1"},
         {"spotify", "Spotify", "com.spotify.tv.android", "1DB954", "", "1"},
     };
     /**
@@ -596,7 +598,11 @@ final class HomeApps {
                 intent = launchIntent(a.getPackageManager(), it.pkg);
                 plain = intent;
                 if (plain != null) plain.addFlags(Intent.FLAG_ACTIVITY_RESET_TASK_IF_NEEDED);
-                if (intent != null && it.uri != null) {
+                if (intent != null && it.item != null) {
+                    // Jellyfin's startup screen reads "ItemId" and closes once the app is up: a running Jellyfin would
+                    // just come to the front, so its task starts over.
+                    intent = new Intent(intent).putExtra("ItemId", it.item).addFlags(Intent.FLAG_ACTIVITY_CLEAR_TASK);
+                } else if (intent != null && it.uri != null) {
                     intent = new Intent(Intent.ACTION_VIEW, android.net.Uri.parse(it.uri)).addCategory(Intent.CATEGORY_BROWSABLE).setPackage(it.pkg);
                     // Netflix ignores the title's address when it is already open or when no source is named: it opens its own home.
                     // Like the TV launchers do, name its activity and the source (30) and start it in a fresh task.

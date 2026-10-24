@@ -95,6 +95,7 @@ lan_server() {   # lan_server <key>: checks it; the host of an http:// one joins
   esac
 }
 lan_server immich_server
+lan_server jellyfin_url
 # Keys that would let another app on the TV into the user's own servers stay out of the APK: tools/send_key.py sends
 # them to the TV (Secrets).
 if [ -n "$(prop immich_api_key '')" ]; then
@@ -131,6 +132,8 @@ final class Config {
     static final boolean SCREENSAVER = $SAVER;   // false: the TV keeps its own
     static final boolean GENERIC = $GENERIC;   // built with --generic, as the APK on GitHub's releases (Updates)
     static final boolean OPEN_IN_STREMIO = $STREMIO;
+    static final String JELLYFIN_URL = "$(prop jellyfin_url '')";
+    static final String JELLYFIN_TOKEN = "$(prop jellyfin_token '')";
 }
 EOF
 
