@@ -15,6 +15,9 @@ Open source. Built with Claude Code. One button to undo.
 
 </div>
 
+> **Personal fork** of [simbasjungles/free-my-tv](https://github.com/simbasjungles/free-my-tv) (MIT). Adds on top of upstream: **Continue Watching thumbnails** — remote https pictures under strict safety rules (upstream issue [#174](https://github.com/simbasjungles/free-my-tv/issues/174)) — and **Jellyfin picks** from your own server, based on [#256](https://github.com/simbasjungles/free-my-tv/pull/256) (branch by e965). Not affiliated with upstream.
+
+
 ## What you get
 
 - **No ads.** No sponsored rows, banners or autoplaying promos. Not one.
