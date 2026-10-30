@@ -1093,6 +1093,7 @@ public class SettingsActivity extends Activity {
             v[SAVER_ROW] = onOff(Prefs.saverWatch());
             String top = Prefs.topContent();
             v[TOP_ROW] = top.equals(Prefs.TOP_CONTINUE) ? Ui.tr("Continue Watching")
+                    : top.equals(Prefs.TOP_BOTH) ? Ui.tr("Picks and Continue Watching")
                     : top.equals(Prefs.TOP_NONE) ? Ui.tr("Clock")
                     : Ui.tr("Picks");
             v[WATCH_ROW] = watchCount();
@@ -1907,7 +1908,7 @@ public class SettingsActivity extends Activity {
             if (!watchPickPending) return;
             watchPickPending = false;
             handler.removeCallbacks(askWatch);
-            if (Prefs.topContent().equals(Prefs.TOP_CONTINUE) && !WatchNext.allowed(getContext())) {
+            if (Prefs.watchWanted(Prefs.topContent()) && !WatchNext.allowed(getContext())) {
                 HomeMode.requestWatchGrant(getContext());
                 watchGrantPending = true;
                 handler.postDelayed(askWatch, WATCH_GRANT_MS);
@@ -1918,13 +1919,13 @@ public class SettingsActivity extends Activity {
         private void askWatch() {
             if (!running) return;
             watchGrantPending = false;
-            if (Prefs.topContent().equals(Prefs.TOP_CONTINUE) && !WatchNext.allowed(getContext())) {
+            if (Prefs.watchWanted(Prefs.topContent()) && !WatchNext.allowed(getContext())) {
                 activity.requestPermissions(new String[] {WatchNext.PERMISSION}, 1);
             }
         }
 
         private boolean watchLocked() {
-            return !Prefs.topContent().equals(Prefs.TOP_CONTINUE);
+            return !Prefs.watchWanted(Prefs.topContent());
         }
 
         /** Looks for the apps that can feed Continue Watching, in the background (only here, never on the home screen). */
