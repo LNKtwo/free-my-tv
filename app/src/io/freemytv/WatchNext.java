@@ -44,15 +44,36 @@ final class WatchNext {
 
         Item(String pkg, String poster, String thumbnail) {
             this.pkg = pkg;
-            picture = thumbnail != null ? thumbnail : poster;
+            // Pick by scheme: on-TV pictures first (a download has more ways to fail), then https ones. An http://
+            // thumbnail must not hide an https:// poster — that was the banner-instead-of-picture symptom of #174.
+            // On-TV pictures win over https ones: a download has more ways to fail than a picture the TV already has.
+            picture = onTv(thumbnail) ? thumbnail : onTv(poster) ? poster
+                    : https(thumbnail) ? thumbnail : https(poster) ? poster
+                    : thumbnail != null ? thumbnail : poster;
             Uri uri = picture == null ? null : Uri.parse(picture);
+            // The apps' own pictures (content://, android.resource://) are read from the TV; https ones (Netflix,
+            // Disney+) are downloaded by WatchArt under tight rules instead of showing the app's banner.
             pictureUri = uri != null && ("content".equalsIgnoreCase(uri.getScheme())
-                    || "android.resource".equalsIgnoreCase(uri.getScheme())) ? uri : null;
+                    || "android.resource".equalsIgnoreCase(uri.getScheme())
+                    || "https".equalsIgnoreCase(uri.getScheme())) ? uri : null;
             pictureKey = pictureUri == null ? null : picture;
             bannerKey = "banner:" + pkg;
         }
 
-        /** The picture for a 16:9 card: the thumbnail (usually 16:9) before the poster. */
+        private static String scheme(String picture) {
+            return picture == null ? null : Uri.parse(picture).getScheme();
+        }
+
+        private static boolean onTv(String picture) {
+            String s = scheme(picture);
+            return "content".equalsIgnoreCase(s) || "android.resource".equalsIgnoreCase(s);
+        }
+
+        private static boolean https(String picture) {
+            return "https".equalsIgnoreCase(scheme(picture));
+        }
+
+        /** The picture for a 16:9 card: the item's chosen picture, by the scheme order above. */
         String picture() {
             return picture;
         }
