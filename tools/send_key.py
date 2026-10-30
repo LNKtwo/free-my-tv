@@ -20,6 +20,7 @@ import re
 import shutil
 import subprocess
 import sys
+import time
 import urllib.error
 import urllib.request
 
@@ -166,7 +167,13 @@ def main():
             return 1
     adb('exec-in', 'content', 'write', '--uri', URI + name, input=key.encode() + b'\n')
     # exec-in says nothing of what the TV did (it returns 0 either way): the TV's own answer tells
+    # The app renames the file when its side closes, a moment after adb returns.
     after = received(name)
+    for _ in range(10):
+        if after and after != before:
+            break
+        time.sleep(0.5)
+        after = received(name)
     if not after or after == before:
         print(f'The TV didn\'t take {name}: it keeps one line of 8 or more printable characters. Nothing changed.')
         return 1
