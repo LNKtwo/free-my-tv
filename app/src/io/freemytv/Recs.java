@@ -293,7 +293,7 @@ final class Recs {
 
     /** Picks on the home screen: from TMDB (with a key) and/or your Jellyfin server. */
     static boolean on(Context c) {
-        return hasKey(c) || Jellyfin.ON;
+        return hasKey(c) || Jellyfin.on(c);
     }
 
     /** Last fetch, for the settings screen: {count, error, at}. Written by the home screen (another process). */
@@ -339,7 +339,9 @@ final class Recs {
         List<Pick> out = new ArrayList<>();
         List<Pick> progress = new ArrayList<>(), liked = new ArrayList<>(), list = new ArrayList<>();
         Map<String, Boolean> have = new HashMap<>();   // one look per app, not per title (this runs every 15 s)
+        boolean ownTab = Prefs.topContent().equals(Prefs.TOP_BOTH);   // what you're in the middle of has its own tab then
         for (Pick p : all()) {
+            if (ownTab && p.resume) continue;
             if ((kind == null || kind.equals(p.kind))
                     && (!p.detailed || (p.pkg != null && have.computeIfAbsent(p.pkg, this::installed)
                     && (p.servicePkg == null || have.computeIfAbsent(p.servicePkg, this::installed))))) {   // app missing or switched off: skip
@@ -437,7 +439,7 @@ final class Recs {
     void refreshIfStale() {
         if (fetching) return;
         long now = System.currentTimeMillis();
-        boolean jf = Jellyfin.ON && (now - jellyfinAt > JELLYFIN_EVERY || now < jellyfinAt);
+        boolean jf = Jellyfin.on(context) && (now - jellyfinAt > JELLYFIN_EVERY || now < jellyfinAt);
         boolean tmdb = false, stale = false, newTrakt = false, checkTrakt = false;
         int p = period(now);
         long stamp = keyStamp, trakt = traktStamp;
@@ -480,7 +482,7 @@ final class Recs {
     /** Keeps the last list if the server doesn't answer (it's off, or the TV is on another network). */
     private void refreshJellyfin() {
         try {
-            List<Pick> list = Jellyfin.picks();
+            List<Pick> list = Jellyfin.picks(context);
             for (Pick p : list) {
                 try {
                     download(p);    // all of them, not just this hour's: they're on your network, and the screensaver shows them
@@ -1042,7 +1044,7 @@ final class Recs {
      */
     private boolean linksOn() {
         String key = Config.WATCHMODE_KEY.trim();
-        return !key.isEmpty() && cache.getInt("wm:refused", 0) != key.hashCode() && Prefs.topContent().equals(Prefs.TOP_PICKS);
+        return !key.isEmpty() && cache.getInt("wm:refused", 0) != key.hashCode() && (Prefs.topContent().equals(Prefs.TOP_PICKS) || Prefs.topContent().equals(Prefs.TOP_BOTH));
     }
 
     /** Sets p.link from what was looked up before, or looks it up (2 requests of the free plan's 2,500 a month). */

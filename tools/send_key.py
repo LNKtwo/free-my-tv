@@ -11,6 +11,7 @@ app's private files (`content write` to its Secrets provider, which only adb may
 arrived (never for the key itself). Android 9 and newer: adb's `content write` isn't there on Android 8. Keys:
   immich_api_key   Immich > Account Settings > API Keys (asset.read, asset.view, asset.download and album.read).
                    Checked against immich_server from config.properties first, when it's set.
+  jellyfin_token   Comes from tools/jellyfin_login.py, which signs in and sends it here for you.
 """
 import getpass
 import json
@@ -23,7 +24,7 @@ import urllib.error
 import urllib.request
 
 URI = 'content://io.freemytv.secrets/'
-NAMES = ('immich_api_key',)
+NAMES = ('immich_api_key', 'jellyfin_token')
 SERIAL = []   # -s <ip>:5555 once connected, so a phone or another TV on adb doesn't get in the way
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 

@@ -102,6 +102,10 @@ if [ -n "$(prop immich_api_key '')" ]; then
   echo "config.properties: immich_api_key isn't built into the app (any app on the TV could read it there)." >&2
   echo "Send it to the TV instead (python3 tools/send_key.py <TV IP> immich_api_key), then remove it here." >&2
 fi
+if [ -n "$(prop jellyfin_token '')" ]; then
+  echo "config.properties: jellyfin_token isn't built into the app (any app on the TV could read it there)." >&2
+  echo "Sign in again with python3 tools/jellyfin_login.py <server> <TV IP>: it goes to the TV and leaves this file." >&2
+fi
 
 rm -rf out && mkdir -p out/gen/io/freemytv out/classes
 cat > out/gen/io/freemytv/Config.java <<EOF
@@ -133,7 +137,6 @@ final class Config {
     static final boolean GENERIC = $GENERIC;   // built with --generic, as the APK on GitHub's releases (Updates)
     static final boolean OPEN_IN_STREMIO = $STREMIO;
     static final String JELLYFIN_URL = "$(prop jellyfin_url '')";
-    static final String JELLYFIN_TOKEN = "$(prop jellyfin_token '')";
 }
 EOF
 
