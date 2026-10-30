@@ -30,6 +30,9 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 
 def adb(*args, **kw):
+    # Without its own input adb gets none: `adb shell` would otherwise eat a key piped to this script.
+    if 'input' not in kw:
+        kw['stdin'] = subprocess.DEVNULL
     return subprocess.run(['adb', *SERIAL, *args], capture_output=True, **kw)
 
 
