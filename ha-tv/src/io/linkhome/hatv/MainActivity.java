@@ -26,8 +26,9 @@ import org.json.JSONObject;
 
 /** Home Assistant on the TV: its own small app, so the web view runs apart from anything with ADB access. */
 public class MainActivity extends Activity {
-    private static final String HOME = "http://192.168.178.127:8123/";
-    private static final String HOST = Uri.parse(HOME).getHost();
+    private static final String BASE = "http://192.168.178.127:8123/";
+    private static final String HOME = BASE + "tv-dashboard/home";
+    private static final String HOST = Uri.parse(BASE).getHost();
     private WebView web;
 
     @Override protected void onCreate(Bundle state) {
@@ -38,6 +39,8 @@ public class MainActivity extends Activity {
         WebSettings s = web.getSettings();
         s.setJavaScriptEnabled(true);
         s.setDomStorageEnabled(true);
+        s.setUseWideViewPort(true);
+        s.setLoadWithOverviewMode(true);
         s.setAllowFileAccess(false);
         s.setAllowContentAccess(false);
         s.setMixedContentMode(WebSettings.MIXED_CONTENT_NEVER_ALLOW);
@@ -45,7 +48,12 @@ public class MainActivity extends Activity {
         CookieManager.getInstance().setAcceptCookie(true);
         web.setWebViewClient(new WebViewClient() {
             @Override public void onPageFinished(WebView v, String url) {
-                v.evaluateJavascript(nav, null);
+                // Once: no sidebar on the TV, as HA remembers it per browser. It takes a reload to apply.
+                v.evaluateJavascript("(function(){if(localStorage.getItem('dockedSidebar')==='\\\"always_hidden\\\"')return false;"
+                        + "localStorage.setItem('dockedSidebar','\\\"always_hidden\\\"');return true;})()", changed -> {
+                    if ("true".equals(changed)) v.reload();
+                    else v.evaluateJavascript(nav, null);
+                });
             }
             /** Only your Home Assistant opens here: nothing else gets a place in this window. */
             @Override public boolean shouldOverrideUrlLoading(WebView v, WebResourceRequest r) {
@@ -87,7 +95,7 @@ public class MainActivity extends Activity {
             if (!"ok".equals(key) || value == null || "null".equals(value)) return;
             try {
                 JSONObject at = new JSONObject(value);
-                float x = (float) at.getDouble("x"), y = (float) at.getDouble("y");
+                float x = (float) at.getDouble("x") * web.getWidth(), y = (float) at.getDouble("y") * web.getHeight();
                 long now = SystemClock.uptimeMillis();
                 MotionEvent down = MotionEvent.obtain(now, now, MotionEvent.ACTION_DOWN, x, y, 0);
                 MotionEvent up = MotionEvent.obtain(now, now + 60, MotionEvent.ACTION_UP, x, y, 0);
