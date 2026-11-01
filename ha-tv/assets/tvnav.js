@@ -129,6 +129,31 @@
   if (tvPage()) {
     var vp = document.querySelector('meta[name=viewport]');
     if (vp) vp.setAttribute('content', 'width=1440');
+    // The glass look, only in this app: other devices and dashboards keep theirs.
+    var look = {'--ha-card-background': 'rgba(18,22,30,0.58)', '--card-background-color': 'rgba(18,22,30,0.58)',
+      '--ha-card-border-radius': '20px', '--ha-card-border-color': 'rgba(255,255,255,0.14)',
+      '--ha-card-border-width': '1px', '--ha-card-backdrop-filter': 'blur(16px) saturate(140%)',
+      '--ha-card-box-shadow': '0 8px 28px rgba(0,0,0,0.35)', '--primary-text-color': '#f4f6fa',
+      '--secondary-text-color': 'rgba(244,246,250,0.72)'};
+    Object.keys(look).forEach(function (k) { document.documentElement.style.setProperty(k, look[k]); });
+    var hideHeader = function (root) {
+      var every = root.querySelectorAll('*');
+      for (var i = 0; i < every.length; i++) {
+        var el = every[i];
+        if (el.tagName === 'HUI-ROOT' && el.shadowRoot) {
+          if (!el.shadowRoot.getElementById('tv-look')) {
+            var st = document.createElement('style');
+            st.id = 'tv-look';
+            st.textContent = '.header{display:none!important} #view,hui-view-container{padding-top:0!important;margin-top:0!important}';
+            el.shadowRoot.appendChild(st);
+          }
+          return true;
+        }
+        if (el.shadowRoot && hideHeader(el.shadowRoot)) return true;
+      }
+      return false;
+    };
+    setInterval(function () { if (tvPage()) hideHeader(document); }, 1000);
   }
   setInterval(show, 250);
   setTimeout(function () { if (!cur) start(); }, 1200);
