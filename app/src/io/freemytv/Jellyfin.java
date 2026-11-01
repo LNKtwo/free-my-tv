@@ -80,7 +80,7 @@ final class Jellyfin {
         JSONArray genres = o.optJSONArray("Genres");
         if (genres != null && genres.length() > 0) parts.add(genres.optString(0));
         parts.add("Jellyfin");
-        p.meta = String.join(" · ", parts);
+        p.meta = android.text.TextUtils.join(" · ", parts);
         p.app = "jellyfin";
         p.pkg = PKG;
         p.detailed = true;

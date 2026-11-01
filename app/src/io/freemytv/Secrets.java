@@ -15,7 +15,6 @@ import java.io.File;
 import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
-import java.nio.file.Files;
 import java.util.Arrays;
 import java.util.List;
 
@@ -40,9 +39,19 @@ public class Secrets extends ContentProvider {
     /** The key sent for `name`, or "" (none yet). A small file read: callers keep it rather than ask every frame. */
     static String get(Context c, String name) {
         try {
-            return new String(Files.readAllBytes(file(c, name).toPath()), StandardCharsets.UTF_8).trim();
+            return read(file(c, name)).trim();
         } catch (IOException e) {
             return "";
+        }
+    }
+
+    /** A whole small file (java.nio.file is Android 8+). */
+    private static String read(File f) throws IOException {
+        try (java.io.FileInputStream in = new java.io.FileInputStream(f)) {
+            byte[] b = new byte[(int) f.length()];
+            int at = 0;
+            for (int n; at < b.length && (n = in.read(b, at, b.length - at)) > 0; ) at += n;
+            return new String(b, 0, at, StandardCharsets.UTF_8);
         }
     }
 
@@ -62,7 +71,7 @@ public class Secrets extends ContentProvider {
     private static boolean whole(File f) {
         if (f.length() == 0 || f.length() > 4096) return false;
         try {
-            String v = new String(Files.readAllBytes(f.toPath()), StandardCharsets.UTF_8).trim();
+            String v = read(f).trim();
             return v.matches("[\\x21-\\x7E]{8,4000}");
         } catch (IOException e) {
             return false;
@@ -95,6 +104,23 @@ public class Secrets extends ContentProvider {
         } catch (FileNotFoundException e) {
             return 0;
         }
+    }
+
+    /** Android before 9 has no `content write`: `content call --method put --arg <name> --extra value:s:<key>`, adb's alone as well. */
+    @Override public android.os.Bundle call(String method, String arg, android.os.Bundle extras) {
+        if (!"put".equals(method) || arg == null || extras == null) return null;
+        try {
+            String name = name(Uri.parse("content://x/" + arg));
+            File done = file(getContext(), name), dir = done.getParentFile(), part = new File(dir, "." + name);
+            if (!dir.isDirectory() && !dir.mkdirs()) return null;
+            try (java.io.FileOutputStream out = new java.io.FileOutputStream(part)) {
+                out.write(extras.getString("value", "").getBytes(StandardCharsets.UTF_8));
+            }
+            if (!(whole(part) && part.renameTo(done))) part.delete();
+        } catch (IOException e) {
+            AppLog.w("secrets: " + arg + " not received");
+        }
+        return null;
     }
 
     /** One row: present (1 or 0) and when it was received (ms, 0 if absent). Never the value. */

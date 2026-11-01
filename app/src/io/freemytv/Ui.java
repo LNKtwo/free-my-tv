@@ -86,7 +86,13 @@ final class Ui {
 
     /** Inter at an optical size (14 = text, 32 = display) and weight; the system font if the file is missing. */
     private static Typeface font(AssetManager a, int opticalSize, int weight) {
-        if (has(a, FONT)) {
+        if (Build.VERSION.SDK_INT < 26 && has(a, FONT)) {   // no font variations: the file's own weight, or its bold
+            try {
+                return Typeface.create(Typeface.createFromAsset(a, FONT), weight >= 600 ? Typeface.BOLD : Typeface.NORMAL);
+            } catch (RuntimeException ignored) {
+            }
+        }
+        if (Build.VERSION.SDK_INT >= 26 && has(a, FONT)) {
             try {
                 Typeface t = new Typeface.Builder(a, FONT)
                         .setFontVariationSettings("'opsz' " + opticalSize + ", 'wght' " + weight).build();

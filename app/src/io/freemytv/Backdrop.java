@@ -210,7 +210,7 @@ final class Backdrop {
 
     /** Copies it to GPU memory (cheap to draw; the process doesn't keep the pixels). */
     static Bitmap gpu(Bitmap b) {
-        Bitmap g = b.copy(Bitmap.Config.HARDWARE, false);
+        Bitmap g = b.copy(android.os.Build.VERSION.SDK_INT >= 26 ? Bitmap.Config.HARDWARE : Bitmap.Config.ARGB_8888, false);
         if (g == null) return b;
         b.recycle();
         return g;

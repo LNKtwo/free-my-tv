@@ -39,6 +39,7 @@ public class HomeActivity extends Activity {
             setContentView(t);
             return;
         }
+        if (android.os.Build.VERSION.SDK_INT < 26) startService(new android.content.Intent(this, HomeWatch.class));
         Ui.init(this);
         home = new HomeView(this);
         setContentView(home);

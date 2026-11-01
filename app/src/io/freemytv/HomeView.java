@@ -125,7 +125,9 @@ final class HomeView extends ViewGroup implements Choreographer.FrameCallback, H
     private static final int L_INK = 0xFF1D1D1F, L_DIM = 0xFF6E6E73, L_FAINT = 0xFF8E8E93;
     private static String[] tabs;
     private static int tabsGeneration = -1;
-    private static final String[] TAB_KIND = {null, "movie", "tv"};
+    private static final String[] TAB_KIND = {null, "movie", "tv", "resume"};
+    /** Before Android 8 no app lists what you're watching: the last tab holds Jellyfin's unfinished titles as cards. */
+    private static final boolean OWN_CONTINUE = Build.VERSION.SDK_INT < 26;
     /** topFocus and topRects: the tabs, then the round buttons. The last tab, Continue Watching, only shows in Prefs.TOP_BOTH. */
     private static final int TABS = 4, TAB_CONTINUE = 3;
     private static final int Z_TOP = 4, Z_CARDS = 5, Z_WATCH = 6;
@@ -518,7 +520,8 @@ final class HomeView extends ViewGroup implements Choreographer.FrameCallback, H
         if (connectivity != null && !networkRegistered) {
             try {
                 if (connectivity.getActiveNetwork() == null) setNetwork(0);
-                connectivity.registerDefaultNetworkCallback(networkCallback, handler);
+                if (Build.VERSION.SDK_INT >= 26) connectivity.registerDefaultNetworkCallback(networkCallback, handler);
+                else connectivity.registerDefaultNetworkCallback(networkCallback);
                 networkRegistered = true;
             } catch (RuntimeException ignored) {
             }
@@ -3908,7 +3911,7 @@ final class HomeView extends ViewGroup implements Choreographer.FrameCallback, H
 
     /** Picks need a TMDB key: without one, "picks" shows the clock, like "nothing". */
     private boolean picksMode() {
-        return picksOn() && (topMode.equals(Prefs.TOP_PICKS) || topMode.equals(Prefs.TOP_BOTH) && tab != TAB_CONTINUE);
+        return picksOn() && (topMode.equals(Prefs.TOP_PICKS) || topMode.equals(Prefs.TOP_BOTH) && (OWN_CONTINUE || tab != TAB_CONTINUE));
     }
 
     /** The picks and Continue Watching, each in its own tab (without picks, Continue Watching alone). */
@@ -3930,7 +3933,7 @@ final class HomeView extends ViewGroup implements Choreographer.FrameCallback, H
     }
 
     private boolean continueMode() {
-        return topMode.equals(Prefs.TOP_CONTINUE) || topMode.equals(Prefs.TOP_BOTH) && (tab == TAB_CONTINUE || !picksOn());
+        return !OWN_CONTINUE && (topMode.equals(Prefs.TOP_CONTINUE) || topMode.equals(Prefs.TOP_BOTH) && (tab == TAB_CONTINUE || !picksOn()));
     }
 
     /** What the top shows now (from reload, off the main thread) and, for Continue Watching, its list. */

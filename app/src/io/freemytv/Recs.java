@@ -341,8 +341,8 @@ final class Recs {
         Map<String, Boolean> have = new HashMap<>();   // one look per app, not per title (this runs every 15 s)
         boolean ownTab = Prefs.topContent().equals(Prefs.TOP_BOTH);   // what you're in the middle of has its own tab then
         for (Pick p : all()) {
-            if (ownTab && p.resume) continue;
-            if ((kind == null || kind.equals(p.kind))
+            if (ownTab && p.resume != "resume".equals(kind)) continue;
+            if ((kind == null || "resume".equals(kind) || kind.equals(p.kind))
                     && (!p.detailed || (p.pkg != null && have.computeIfAbsent(p.pkg, this::installed)
                     && (p.servicePkg == null || have.computeIfAbsent(p.servicePkg, this::installed))))) {   // app missing or switched off: skip
                 (p.mine == PROGRESS ? progress : p.mine == LIKED ? liked : list).add(p);
@@ -922,7 +922,7 @@ final class Recs {
             p.pkg = STREMIO;
             p.link = "stremio:///detail/" + (p.kind.equals("movie") ? "movie" : "series") + "/" + imdb;
         }
-        p.meta = String.join(" · ", parts);
+        p.meta = android.text.TextUtils.join(" · ", parts);
         p.detailed = true;
     }
 
@@ -1196,7 +1196,7 @@ final class Recs {
                 String length = kind.equals("movie") ? runtime(m.optInt("duration") / 60000) : seasons(m.optInt("childCount"));
                 if (length != null) parts.add(length);
                 parts.add("Plex");
-                p.meta = String.join(" · ", parts);
+                p.meta = android.text.TextUtils.join(" · ", parts);
                 p.detailed = true;
                 out.add(p);
             }

@@ -63,7 +63,7 @@ public class SleepOverlay extends Service {
                 .putExtra("language", Prefs.language());
         boolean wanted = Prefs.sleepShown() && SleepTimer.minutesLeft(c) > 0;
         if (wanted && Settings.canDrawOverlays(c)) {
-            c.startForegroundService(i);
+            if (android.os.Build.VERSION.SDK_INT >= 26) c.startForegroundService(i); else c.startService(i);
         } else {
             c.stopService(i);
             if (wanted && Capabilities.overlay(c)) allow(c.getApplicationContext());
@@ -115,9 +115,14 @@ public class SleepOverlay extends Service {
         super.onCreate();
         // In the foreground first: a quick stop right after the start must not find it still in the background.
         NotificationManager nm = getSystemService(NotificationManager.class);
-        nm.createNotificationChannel(new NotificationChannel("sleep", Ui.tr("Sleep Timer"), NotificationManager.IMPORTANCE_MIN));
-        startForeground(1, new Notification.Builder(this, "sleep").setSmallIcon(R.drawable.icon)
-                .setContentTitle(Ui.tr("Sleep Timer")).build());
+        Notification.Builder note;
+        if (android.os.Build.VERSION.SDK_INT >= 26) {
+            nm.createNotificationChannel(new NotificationChannel("sleep", Ui.tr("Sleep Timer"), NotificationManager.IMPORTANCE_MIN));
+            note = new Notification.Builder(this, "sleep");
+        } else {
+            note = new Notification.Builder(this);
+        }
+        startForeground(1, note.setSmallIcon(R.drawable.icon).setContentTitle(Ui.tr("Sleep Timer")).build());
         Ui.init(this);   // its own process: the app's font isn't loaded here yet
         SleepTimer.listen(this);
         float k = getResources().getDisplayMetrics().widthPixels / 1920f;

@@ -20,6 +20,10 @@ final class ScreenBlur {
     }
 
     static void capture(Activity a, Handler on, Done done) {
+        if (android.os.Build.VERSION.SDK_INT < 26) {
+            done.run(null);
+            return;
+        }
         final Bitmap small = Bitmap.createBitmap(W, H, Bitmap.Config.ARGB_8888);
         try {
             PixelCopy.request(a.getWindow(), small, result -> {

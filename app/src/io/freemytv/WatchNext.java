@@ -91,12 +91,13 @@ final class WatchNext {
     }
 
     static boolean allowed(Context c) {
+        if (android.os.Build.VERSION.SDK_INT < 26) return true;
         return c.checkSelfPermission(PERMISSION) == PackageManager.PERMISSION_GRANTED;
     }
 
     /** Everything to show, newest first (off the main thread: these are content provider queries). */
     static List<Item> load(Context c) {
-        if (!allowed(c)) return Collections.emptyList();
+        if (android.os.Build.VERSION.SDK_INT < 26 || !allowed(c)) return Collections.emptyList();   // Android 8+ has this list
         ContentResolver cr = c.getContentResolver();
         List<Item> all = new ArrayList<>(read(cr, TvContract.WatchNextPrograms.CONTENT_URI));
         for (long channel : continueChannels(cr, c.getPackageName())) {
@@ -128,6 +129,7 @@ final class WatchNext {
      * lists, plus any publishing right now. As {package, name}, sorted by name, without Free My TV.
      */
     static List<String[]> sources(Context c) {
+        if (android.os.Build.VERSION.SDK_INT < 26) return new ArrayList<>();
         Set<String> pkgs = new HashSet<>();
         PackageManager pm = c.getPackageManager();
         try {

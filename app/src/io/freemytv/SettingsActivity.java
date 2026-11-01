@@ -2286,7 +2286,7 @@ public class SettingsActivity extends Activity {
             if (screen == HOME_CHOICE) {
                 boolean wantFree = focus == 0;
                 boolean already = wantFree ? freeActive() : HomeMode.ORIGINAL.equals(state.optString("mode", HomeMode.ORIGINAL));
-                if (!already && !busy()) {
+                if (!already && !busy() && android.os.Build.VERSION.SDK_INT >= 26) {   // Fire OS 6: HomeWatch does this, nothing is switched off
                     requestedAt = HomeMode.request(c, wantFree ? HomeMode.FREE : HomeMode.ORIGINAL);
                     pendingAt = SystemClock.uptimeMillis();
                     stalled = false;

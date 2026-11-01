@@ -245,7 +245,7 @@ final class Prefs {
 
     /** What the cards under the title show: the recommendations (TMDB), what you were watching in your apps, or nothing. */
     static String topContent() {
-        String v = sp().getString("topContent", TOP_PICKS);
+        String v = sp().getString("topContent", android.os.Build.VERSION.SDK_INT < 26 ? TOP_BOTH : TOP_PICKS);
         return v.equals(TOP_BOTH) || v.equals(TOP_CONTINUE) || v.equals(TOP_NONE) ? v : TOP_PICKS;
     }
 
