@@ -689,6 +689,9 @@ final class HomeApps {
             ComponentName dtt = new ComponentName("com.amazon.tv.livetv", "com.amazon.tv.livetv.DttIconWrapperActivity");
             // exists(), not resolveActivity: that hands an explicit component back without looking (the sticks have none)
             if (exists(c, dtt)) return new Intent().setComponent(dtt);
+            // The sticks have no antenna: an IPTV app is their live TV.
+            Intent iptv = launchIntent(pm, "eu.siptv.video");
+            if (iptv != null) return iptv;
         }
         // Sony: its TV app (the launcher tile's) knows the last input and channel. A tuner's channel list can be an empty
         // one: a BRAVIA lists DvbOpv1 (the CI+ operator input) beside the satellite and antenna ones (#340).
