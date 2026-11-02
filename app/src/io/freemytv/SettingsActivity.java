@@ -492,6 +492,7 @@ public class SettingsActivity extends Activity {
         }
 
         private boolean freeActive() {
+            if (android.os.Build.VERSION.SDK_INT < 26) return !HomeWatch.original(getContext());
             return HomeMode.FREE.equals(state.optString("mode")) && !state.optBoolean("homeReverted");
         }
 
@@ -2286,6 +2287,7 @@ public class SettingsActivity extends Activity {
             if (screen == HOME_CHOICE) {
                 boolean wantFree = focus == 0;
                 boolean already = wantFree ? freeActive() : HomeMode.ORIGINAL.equals(state.optString("mode", HomeMode.ORIGINAL));
+                if (android.os.Build.VERSION.SDK_INT < 26) HomeWatch.setOriginal(c, !wantFree);
                 if (!already && !busy() && android.os.Build.VERSION.SDK_INT >= 26) {   // Fire OS 6: HomeWatch does this, nothing is switched off
                     requestedAt = HomeMode.request(c, wantFree ? HomeMode.FREE : HomeMode.ORIGINAL);
                     pendingAt = SystemClock.uptimeMillis();

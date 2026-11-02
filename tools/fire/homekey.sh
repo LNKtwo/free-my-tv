@@ -5,6 +5,6 @@ P=/data/local/tmp/homekey.pid
 echo $$ > $P
 logcat -v brief -T 1 -b system ActivityManager:I '*:S' | while read line; do
   case "$line" in
-    *"START u0"*category.HOME*com.amazon.tv.launcher*) am start -n io.freemytv/.HomeActivity >/dev/null 2>&1 ;;
+    *"START u0"*category.HOME*com.amazon.tv.launcher*) am start -n io.freemytv/.HomeActivity --ez io.freemytv.FROM_HOME true >/dev/null 2>&1 ;;
   esac
 done

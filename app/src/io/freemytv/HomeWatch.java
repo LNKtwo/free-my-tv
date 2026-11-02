@@ -38,10 +38,33 @@ public class HomeWatch extends Service {
                 at = e.getTimeStamp();
             }
         }
-        if (AMAZON_HOME.equals(last) && at != handled) {
+        if (AMAZON_HOME.equals(last) && at != handled && !original(this)) {
             handled = at;
             startActivity(new Intent(this, HomeActivity.class).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));
         }
+    }
+
+    /** Fire OS: Home Settings > Home screen > Original leaves Amazon's home screen up (a file, read by both processes). */
+    static boolean original(Context c) {
+        return new java.io.File(c.getFilesDir(), "home-original").exists();
+    }
+
+    static void setOriginal(Context c, boolean on) {
+        java.io.File f = new java.io.File(c.getFilesDir(), "home-original");
+        try {
+            if (on) f.createNewFile(); else f.delete();
+        } catch (java.io.IOException e) {
+            AppLog.w("home choice: " + e.getMessage());
+        }
+    }
+
+    /** tools/fire/homekey.sh opens the app with this when Amazon's home came up: with Original picked, it steps aside. */
+    static final String FROM_HOME = "io.freemytv.FROM_HOME";
+
+    static boolean stepAside(android.app.Activity a, Intent i) {
+        if (i == null || !i.getBooleanExtra(FROM_HOME, false) || !original(a)) return false;
+        a.moveTaskToBack(true);
+        return true;
     }
 
     @Override public void onCreate() {

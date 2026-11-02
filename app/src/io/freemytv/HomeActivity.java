@@ -45,6 +45,7 @@ public class HomeActivity extends Activity {
         setContentView(home);
         getWindow().setBackgroundDrawable(null);
         if (getIntent().getBooleanExtra(EXTRA_ALL_APPS, false)) home.showAllApps();
+        HomeWatch.stepAside(this, getIntent());
     }
 
     @Override protected void onResume() {
@@ -71,7 +72,7 @@ public class HomeActivity extends Activity {
     /** Home button pressed on the home screen: back to the entry state (focus on the first app, sheet closed). */
     @Override protected void onNewIntent(Intent intent) {
         super.onNewIntent(intent);
-        if (home == null) return;
+        if (home == null || HomeWatch.stepAside(this, intent)) return;
         if (intent.getBooleanExtra(EXTRA_ALL_APPS, false)) {
             home.showAllApps();
             return;
